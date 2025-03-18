@@ -14,6 +14,7 @@ import * as Progress from "react-native-progress";
 import { Audio } from "expo-av";
 import Checkbox from "expo-checkbox";
 import Layout from "./components/layout";
+import { Feather } from '@expo/vector-icons'; // Import Feather icons for the gear icon
 
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
@@ -112,8 +113,197 @@ async function scheduleNotification(title, body) {
   });
 }
 
+// --------------------- Settings Screen ---------------------
+function SettingsScreen({ navigation, route }) {
+  const { theme, toggleTheme, isLightMode } = useContext(ThemeContext);
+  
+  // Get the sound state and toggle function from route params
+  const soundEnabled = route.params?.soundEnabled || false;
+  const toggleSound = route.params?.toggleSound || (() => {});
+  
+  // Add state for display name editing
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+  const [updateMessage, setUpdateMessage] = useState({ text: "", isError: false });
+
+  // Get current user on component mount
+  useEffect(() => {
+    const user = auth.currentUser;
+    setCurrentUser(user);
+    if (user && user.displayName) {
+      setNewDisplayName(user.displayName);
+    }
+  }, []);
+
+  // Function to update display name
+  const updateDisplayName = async () => {
+    if (!newDisplayName.trim()) {
+      setUpdateMessage({ text: "Display name cannot be empty", isError: true });
+      return;
+    }
+
+    try {
+      if (currentUser) {
+        await updateProfile(currentUser, {
+          displayName: newDisplayName.trim()
+        });
+        
+        // Force refresh of current user data
+        setCurrentUser({...auth.currentUser});
+        
+        setUpdateMessage({ text: "Display name updated successfully!", isError: false });
+        setIsEditingName(false);
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setUpdateMessage({ text: "", isError: false });
+        }, 3000);
+      }
+    } catch (error) {
+      console.error("Error updating display name:", error);
+      setUpdateMessage({ text: `Error: ${error.message}`, isError: true });
+    }
+  };
+  
+  return (
+    <Layout style={{ backgroundColor: theme.background }}>
+      <View style={styles.settingsContainer}>
+        <Text style={[styles.settingsTitle, { color: theme.text }]}>Settings</Text>
+        
+        {/* Profile Section */}
+        <View style={styles.settingsSection}>
+          <Text style={[styles.settingsSectionTitle, { color: theme.text }]}>Profile</Text>
+          
+          {currentUser && (
+            <View style={styles.profileSection}>
+              <Text style={[styles.profileLabel, { color: theme.text }]}>
+                {isEditingName ? "Edit Display Name:" : "Display Name:"}
+              </Text>
+              
+              {isEditingName ? (
+                <View style={styles.nameEditContainer}>
+                  <TextInput
+                    style={[
+                      styles.nameInput,
+                      { backgroundColor: theme.inputBackground, color: theme.text, borderColor: theme.text }
+                    ]}
+                    value={newDisplayName}
+                    onChangeText={setNewDisplayName}
+                    placeholder="Enter new display name"
+                    placeholderTextColor={isLightMode ? "#555" : "#aaa"}
+                  />
+                  <View style={styles.nameEditButtons}>
+                    <TouchableOpacity
+                      style={[styles.settingsButton, { backgroundColor: "#4CAF50", marginRight: 8 }]}
+                      onPress={updateDisplayName}
+                    >
+                      <Text style={[styles.settingsButtonText, { color: "#fff" }]}>Save</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.settingsButton, { backgroundColor: "#f44336" }]}
+                      onPress={() => {
+                        setIsEditingName(false);
+                        setNewDisplayName(currentUser.displayName || "");
+                        setUpdateMessage({ text: "", isError: false });
+                      }}
+                    >
+                      <Text style={[styles.settingsButtonText, { color: "#fff" }]}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.profileInfoRow}>
+                  <Text style={[styles.profileValue, { color: theme.text }]}>
+                    {currentUser.displayName || "No display name set"}
+                  </Text>
+                  <TouchableOpacity 
+                    style={[styles.settingsButton, { backgroundColor: theme.buttonBackground }]}
+                    onPress={() => setIsEditingName(true)}
+                  >
+                    <Text style={[styles.settingsButtonText, { color: theme.buttonText }]}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {updateMessage.text ? (
+                <Text 
+                  style={[
+                    styles.updateMessage, 
+                    { color: updateMessage.isError ? "#f44336" : "#4CAF50" }
+                  ]}
+                >
+                  {updateMessage.text}
+                </Text>
+              ) : null}
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.settingsSection}>
+          <Text style={[styles.settingsSectionTitle, { color: theme.text }]}>Appearance</Text>
+          <View style={styles.settingsRow}>
+            <Text style={[styles.settingsLabel, { color: theme.text }]}>Theme</Text>
+            <TouchableOpacity 
+              style={[styles.settingsButton, { backgroundColor: theme.buttonBackground }]}
+              onPress={toggleTheme}
+            >
+              <Text style={[styles.settingsButtonText, { color: theme.buttonText }]}>
+                {isLightMode ? "Switch to Dark" : "Switch to Light"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        <View style={styles.settingsSection}>
+          <Text style={[styles.settingsSectionTitle, { color: theme.text }]}>Audio</Text>
+          <View style={styles.settingsRow}>
+            <Text style={[styles.settingsLabel, { color: theme.text }]}>Sound Effects  </Text>
+            <TouchableOpacity 
+              style={[styles.settingsButton, { backgroundColor: theme.buttonBackground }]}
+              onPress={() => {
+                // Call the toggleSound function from HomeScreen
+                toggleSound();
+                // Force a UI update with a temporary state update
+                navigation.setParams({
+                  soundEnabled: !soundEnabled,
+                  toggleSound: toggleSound
+                });
+              }}
+            >
+              <Text style={[styles.settingsButtonText, { color: theme.buttonText }]}>
+                {soundEnabled ? "On" : "Off"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        <View style={styles.settingsSection}>
+          <Text style={[styles.settingsSectionTitle, { color: theme.text }]}>Account</Text>
+          <TouchableOpacity 
+            style={[styles.settingsButton, styles.logoutButton]}
+            onPress={() => {
+              auth.signOut()
+                .then(() => navigation.replace('Login'))
+                .catch(error => Alert.alert('Error signing out', error.message));
+            }}
+          >
+            <Text style={styles.logoutButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <TouchableOpacity 
+          style={[styles.settingsButton, { backgroundColor: theme.buttonBackground, marginTop: 20 }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={[styles.settingsButtonText, { color: theme.buttonText }]}>Back to Timer</Text>
+        </TouchableOpacity>
+      </View>
+    </Layout>
+  );
+}
 // --------------------- HomeScreen (Pomodoro App) ---------------------
-function HomeScreen() {
+function HomeScreen({ navigation }) {
   const [timeLeft, setTimeLeft] = useState(POMODORO_TIME);
   const [isRunning, setIsRunning] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
@@ -210,13 +400,19 @@ function HomeScreen() {
 
   return (
     <Layout style={{ backgroundColor: theme.background }}>
-      {/* Theme toggle button at top right */}
-      <View style={styles.themeToggleContainer}>
-        <TouchableOpacity onPress={toggleTheme}>
-          <Text style={[styles.themeToggleText, { color: theme.text }]}>
-            Mode: {isLightMode ? "Light" : "Dark"}
-          </Text>
-        </TouchableOpacity>
+      {/* Settings icon at top right */}
+      <View style={styles.headerIconsContainer}>
+      <TouchableOpacity 
+  style={styles.settingsIconButton}
+  onPress={() => navigation.navigate('Settings', {
+    soundEnabled: soundOn,
+    toggleSound: () => setSoundOn(prev => !prev)
+  })}
+>
+  <Feather name="settings" size={24} color={theme.text} />
+</TouchableOpacity>
+        
+        
       </View>
       
       {user ? (
@@ -228,14 +424,6 @@ function HomeScreen() {
       )}
       <View style={styles.headerRow}>
         <Text style={[styles.points, { color: theme.text }]}>Points: {points}</Text>
-        <TouchableOpacity
-          onPress={() => setSoundOn(!soundOn)}
-          style={styles.soundToggle}
-        >
-          <Text style={styles.soundToggleText}>
-            {soundOn ? "Sound: On" : "Sound: Off"}
-          </Text>
-        </TouchableOpacity>
       </View>
       <Text style={[styles.session, { color: theme.text }]}>
         {onBreak ? "Break Time!" : "Focus Mode"}
@@ -544,12 +732,54 @@ export default function App() {
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
           <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
     </ThemeProvider>
   );
 }
-
+const additionalStyles = {
+  // Profile section styles
+  profileSection: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  profileLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  profileInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  profileValue: {
+    fontSize: 16,
+    flex: 1,
+  },
+  nameEditContainer: {
+    width: '100%',
+  },
+  nameInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    fontSize: 16,
+  },
+  nameEditButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  updateMessage: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: 'bold',
+  }
+};
 const styles = StyleSheet.create({
   // ---------- HomeScreen and Common Styles ----------
   headerRow: {
@@ -657,17 +887,83 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
   },
-  // ---------- Theme Toggle Styles (HomeScreen) ----------
-  themeToggleContainer: {
+  // ---------- Header Icons Container (HomeScreen) ----------
+  headerIconsContainer: {
+    flexDirection: "row",
+    justifyContent: "flex-end", // Changed from space-between to flex-end
+    alignItems: "center",
+    width: "100%",
     position: "absolute",
-    top: 120,
+    top: 50, // Changed from 120 to 50 (or whatever top value works for your layout)
     right: 20,
     zIndex: 10,
-    padding: 5,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    borderRadius: 5,
   },
   themeToggleText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    backgroundColor: "rgba(0,0,0,0.3)",
+    padding: 5,
+    borderRadius: 5,
+  },
+  settingsIconButton: {
+    padding: 8,
+    backgroundColor: "rgba(97, 218, 251, 0.8)",
+    borderRadius: 5,
+    marginRight: 0, // Changed from 10 to 0
+    marginTop: 0, // Changed from -12 to 0
+  },
+  // ---------- Settings Screen Styles ----------
+  settingsContainer: {
+    flex: 0,
+    padding: 0,
+    width: "100%",
+  },
+  settingsTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 30,
+    textAlign: "center",
+  },
+  settingsSection: {
+    marginBottom: 30,
+    width: "100%",
+  },
+  settingsSectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#61dafb",
+    paddingBottom: 5,
+  },
+  settingsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  settingsLabel: {
+    fontSize: 18,
+  },
+  settingsButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: "center",
+  },
+  settingsButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  logoutButton: {
+    backgroundColor: "#ff4d4d",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  logoutButtonText: {
+    color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
   },
@@ -732,4 +1028,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: "center",
   },
+  profileSection: additionalStyles.profileSection,
+  profileLabel: additionalStyles.profileLabel,
+  profileInfoRow: additionalStyles.profileInfoRow,
+  profileValue: additionalStyles.profileValue,
+  nameEditContainer: additionalStyles.nameEditContainer,
+  nameInput: additionalStyles.nameInput,
+  nameEditButtons: additionalStyles.nameEditButtons,
+  updateMessage: additionalStyles.updateMessage,
 });
